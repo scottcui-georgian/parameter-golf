@@ -40,6 +40,10 @@ Happy training!
 
 ## Getting Started
 
+### Virtual environments (this checkout)
+
+This repo uses **named virtualenvs** (see [**Development setup**](#development-setup) for full commands): `.venv-mlx` for Apple Silicon training, `.venv-dev-cpu` for CPU PyTorch + Modal from your laptop. Always pass `UV_PROJECT_ENVIRONMENT=…` to `uv sync` and `uv run` so packages land in the intended env.
+
 ### Training Your First Model (Mac with Apple Silicon)
 
 If you have an Apple laptop or desktop with Apple Silicon, we've set up a simple MLX training script to help you start iterating locally.
@@ -51,13 +55,21 @@ First, clone the repository and sync the MLX environment with `uv`:
 ```bash
 git clone https://github.com/openai/parameter-golf.git
 cd parameter-golf
-uv sync --extra mlx
+UV_PROJECT_ENVIRONMENT=.venv-mlx uv sync --extra mlx
 ```
+
+For IDE completion / type-checking on `workspace/train_gpt.py` without installing CUDA PyTorch, add the CPU-only extra (same `torch` pin as Modal; from PyPI) into the MLX venv:
+
+```bash
+UV_PROJECT_ENVIRONMENT=.venv-mlx uv sync --extra mlx --extra dev-cpu
+```
+
+Do not enable `dev-cpu` together with `linux-nvidia` in the same environment.
 
 Download our cached version of FineWeb with the 1024-token vocabulary:
 
 ```bash
-uv run python data/cached_challenge_fineweb.py --variant sp1024 --train-shards 10
+UV_PROJECT_ENVIRONMENT=.venv-mlx uv run python data/cached_challenge_fineweb.py --variant sp1024 --train-shards 10
 ```
 
 This populates `./data/datasets/fineweb10B_sp1024/` and `./data/tokenizers/`.
@@ -71,7 +83,7 @@ ITERATIONS=200 \
 TRAIN_BATCH_TOKENS=8192 \
 VAL_LOSS_EVERY=0 \
 VAL_BATCH_SIZE=81920 \
-uv run python train_gpt_mlx.py
+UV_PROJECT_ENVIRONMENT=.venv-mlx uv run python train_gpt_mlx.py
 ```
 
 Validation always runs on the full `fineweb_val_*` split, which is the fixed first-50k-document set. The smoke command above skips periodic validation and just prints the final `val_loss` and `val_bpb` once at the end.
@@ -79,6 +91,8 @@ Validation always runs on the full `fineweb_val_*` split, which is the fixed fir
 ### Scaling Up to a Remote Machine
 
 Once you're happy with your local tests, or you want more compute, switch to a remote CUDA machine.
+
+**Modal:** This checkout includes a small Modal runner (download data on CPU, train with **`workspace/train_gpt.py`** on GPU — not MLX). Setup and commands: [.runner/README.md](.runner/README.md).
 
 You can rent GPUs from anywhere, but OpenAI is partnering with Runpod to make setup as easy as possible.  
 
@@ -99,6 +113,8 @@ cd parameter-golf
 uv sync --extra linux-nvidia
 ```
 
+On Linux **without** CUDA training (e.g. only editing or type-checking `workspace/train_gpt.py`), use `UV_PROJECT_ENVIRONMENT=.venv-dev-cpu uv sync --extra dev-cpu` instead—not together with `linux-nvidia`. See [Development setup](#development-setup).
+
 Download our cached version of FineWeb. We'll use the 1024-token vocabulary for now.
 
 ```bash
@@ -114,21 +130,103 @@ RUN_ID=baseline_sp1024 \
 DATA_PATH=./data/datasets/fineweb10B_sp1024/ \
 TOKENIZER_PATH=./data/tokenizers/fineweb_1024_bpe.model \
 VOCAB_SIZE=1024 \
-uv run torchrun --standalone --nproc_per_node=1 train_gpt.py
+uv run torchrun --standalone --nproc_per_node=1 workspace/train_gpt.py
 ```
 
-By default, `train_gpt.py` keeps its ~10 minute wallclock cap. If you want a longer run, override it explicitly, for example `MAX_WALLCLOCK_SECONDS=0`.
+By default, `workspace/train_gpt.py` keeps its ~10 minute wallclock cap. If you want a longer run, override it explicitly, for example `MAX_WALLCLOCK_SECONDS=0`.
 
 By default, this command prints `train_loss` step logs during training and prints `val_loss`, `val_bpb`, and compressed model size in the final `final_int8_zlib_roundtrip` lines at the end. If you want periodic validation logs during the run, set `VAL_LOSS_EVERY`, for example `VAL_LOSS_EVERY=200`. For the baseline config, the final `val_bpb` should land around ~1.2 with a compressed model size under 16MB.
 
 For dataset export, tokenizer export, and docs-cache rebuild instructions, see [data/README.md](data/README.md).
+
+## Development setup
+
+Use [uv](https://docs.astral.sh/uv/) with **Python 3.12**. This checkout keeps **separate** envs so MLX, CPU PyTorch, and CUDA PyTorch are not mixed accidentally.
+
+### Layout
+
+| Path | Extras | Use case |
+|------|--------|----------|
+| `.venv-mlx` | `mlx` (optional `+ dev-cpu`) | Apple Silicon: `train_gpt_mlx.py`, local data prep. |
+| `.venv-dev-cpu` | `dev-cpu` | Laptop: CPU `torch` for `workspace/train_gpt.py` in the editor, **`modal`** for `python run.py prepare\|train`. |
+| `.venv` (default) | `linux-nvidia` | Typical **Linux GPU** box (e.g. Runpod): CUDA `torch` only. |
+
+Do **not** enable `dev-cpu` and `linux-nvidia` in the same environment (`uv` will error).
+
+### Create or refresh environments
+
+From the repository root (`parameter-golf/`):
+
+```bash
+# Apple Silicon — MLX only
+UV_PROJECT_ENVIRONMENT=.venv-mlx uv sync --extra mlx
+
+# Apple Silicon — MLX + CPU PyTorch (IDE / types for workspace/train_gpt.py)
+UV_PROJECT_ENVIRONMENT=.venv-mlx uv sync --extra mlx --extra dev-cpu
+
+# Laptop — CPU PyTorch + Modal CLI (no MLX)
+UV_PROJECT_ENVIRONMENT=.venv-dev-cpu uv sync --extra dev-cpu
+
+# Linux + NVIDIA GPU (e.g. cloud pod) — default .venv is fine
+uv sync --extra linux-nvidia
+```
+
+After editing [pyproject.toml](pyproject.toml), run `uv lock` (or let `uv sync` update the lockfile) and sync again.
+
+### Run commands with the right env
+
+Prefix **`UV_PROJECT_ENVIRONMENT=…`** so `uv run` installs into and uses that interpreter:
+
+```bash
+# MLX workflow
+UV_PROJECT_ENVIRONMENT=.venv-mlx uv run python train_gpt_mlx.py
+UV_PROJECT_ENVIRONMENT=.venv-mlx uv run python data/cached_challenge_fineweb.py --variant sp1024 --train-shards 1
+
+# Modal wrapper (CPU prepare / GPU train on Modal’s cloud)
+# Use .venv-dev-cpu, or .venv-mlx if you synced with `--extra mlx --extra dev-cpu` (includes modal).
+UV_PROJECT_ENVIRONMENT=.venv-dev-cpu uv run python run.py prepare --train-shards 1 --variant sp1024
+UV_PROJECT_ENVIRONMENT=.venv-dev-cpu uv run python run.py train
+
+# Optional: smoke train with small budget
+RUN_ID=smoke ITERATIONS=200 TRAIN_BATCH_TOKENS=8192 VAL_LOSS_EVERY=0 \
+  UV_PROJECT_ENVIRONMENT=.venv-dev-cpu uv run python run.py train
+
+# Same Modal commands using the combined Mac env (mlx + dev-cpu extras):
+# UV_PROJECT_ENVIRONMENT=.venv-mlx uv run python run.py prepare --train-shards 1 --variant sp1024
+```
+
+On a Linux GPU machine after `uv sync --extra linux-nvidia`, plain `uv run torchrun … workspace/train_gpt.py` uses `.venv` automatically.
+
+### Editors
+
+Point **Python: Select Interpreter** at:
+
+- `.venv-mlx/bin/python` — MLX + optional torch for hybrid work on Mac  
+- `.venv-dev-cpu/bin/python` — `workspace/train_gpt.py` + Modal without MLX  
+
+**Basedpyright / Pyright:** import resolution uses [`pyproject.toml`](pyproject.toml) (`[tool.basedpyright]` / `[tool.pyright]`), which pins analysis to **`.venv-dev-cpu`**. If you only use `.venv-mlx` with `mlx` + `dev-cpu` extras, change the `venv = "…"` entries there to `.venv-mlx` (or add a `pyrightconfig.json` beside the task root).
+
+### Autoresearch CLI
+
+Experiment tracking expects this task layout (`workspace/`, `run.py`, `.runner/`). With the `autoresearch` package on `PYTHONPATH` or installed, run from the task root, for example:
+
+```bash
+autoresearch summary
+autoresearch read <commit>
+```
+
+Orchestrator and worker prompts live under [`instructions/`](instructions/).
+
+### Further reading
+
+- Modal details: [.runner/README.md](.runner/README.md)
 
 
 ## FAQ
 
 **What exactly counts toward the 16MB artifact size?**
 
-The submission artifact is computed as code bytes plus compressed model bytes. All counted code should live in the `train_gpt.py` script.
+The submission artifact is computed as code bytes plus compressed model bytes. In this repo, all counted training code should live in **`workspace/train_gpt.py`** (record submissions still ship a `train_gpt.py` snapshot inside the record folder).
 The cap is decimal 16MB, i.e. 16,000,000 total bytes, not 16 MiB / 16,777,216 bytes.
 No external downloads, training dataset access, or network calls are allowed during evaluation. The artifact must be fully self-contained and reproducible.
 
@@ -174,7 +272,7 @@ Non-record submissions should be made in the same fashion as SOTA records, as de
 
 #### PRs on Core Code
 
-The `train_gpt.py` and `train_gpt_mlx.py` scripts are intended as good launching-off points for new participants, not SOTA configs. We'll accept PRs that tune, improve, or simplify these scripts without significantly increasing complexity, but the best models should stay in the `/records` folder.
+The `workspace/train_gpt.py` and root `train_gpt_mlx.py` scripts are intended as good launching-off points for new participants, not SOTA configs. We'll accept PRs that tune, improve, or simplify these scripts without significantly increasing complexity, but the best models should stay in the `/records` folder.
 
 ## Support
 

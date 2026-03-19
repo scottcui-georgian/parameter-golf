@@ -7,6 +7,9 @@ data/datasets
 data/manifest.json
 data/docs_selected.jsonl
 .mypy_cache/
-.venv
+.venv-mlx/
+.venv-dev-cpu/
+# Stray default env if someone runs `uv sync` without `UV_PROJECT_ENVIRONMENT`.
+.venv/
 logs/
 .env

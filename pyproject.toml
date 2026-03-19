@@ -16,6 +16,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# CPU PyTorch from PyPI + Modal CLI for local `modal run` / `.runner` (same torch pin as remote image).
+dev-cpu = [
+    "modal>=1.3.5,<2",
+    "torch==2.9.1",
+]
 linux-nvidia = [
     "torch==2.9.1; sys_platform == 'linux'",
 ]
@@ -38,9 +43,14 @@ conflicts = [
         { extra = "linux-nvidia" },
         { extra = "mlx" },
     ],
+    [
+        { extra = "linux-nvidia" },
+        { extra = "dev-cpu" },
+    ],
 ]
 
 [tool.uv.sources]
+# CUDA wheels only when linux-nvidia is selected; dev-cpu resolves torch from PyPI (CPU).
 torch = [
     { index = "pytorch-cu128", extra = "linux-nvidia", marker = "sys_platform == 'linux'" },
 ]
@@ -49,3 +59,15 @@ torch = [
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
+
+# Static analysis: use the dev-cpu venv (CPU torch + modal). The selected editor
+# interpreter alone does not configure Basedpyright/Pyright’s import resolution.
+[tool.basedpyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv-dev-cpu"
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv-dev-cpu"

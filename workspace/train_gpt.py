@@ -1,7 +1,12 @@
 """
-The `train_gpt.py` and `train_gpt_mlx.py` scripts are intended as good launching-off points for new participants, not SOTA configs. We'll accept PRs that tune, improve, or simplify these scripts without significantly increasing complexity, but competitive submissions should stay in the `/records` folder.
+CUDA / torchrun training entrypoint (canonical path: ``workspace/train_gpt.py``).
 
-Hard stop: `train_gpt.py` and `train_gpt_mlx.py` must never be longer than 1500 lines.
+Paired with root ``train_gpt_mlx.py`` for Apple Silicon. Both are intended as good
+launching-off points for new participants, not SOTA configs. We'll accept PRs that tune,
+improve, or simplify these scripts without significantly increasing complexity, but
+competitive submissions should stay in the ``/records`` folder.
+
+Hard stop: this file and ``train_gpt_mlx.py`` must never be longer than 1500 lines.
 """
 
 from __future__ import annotations
@@ -43,18 +48,20 @@ class Hyperparameters:
     val_files = os.path.join(data_path, "fineweb_val_*.bin")
     tokenizer_path = os.environ.get("TOKENIZER_PATH", "./data/tokenizers/fineweb_1024_bpe.model")
     run_id = os.environ.get("RUN_ID", str(uuid.uuid4()))
+    # Modal runner sets this to the mounted volume so logs and checkpoints survive the container.
+    output_root = os.environ.get("PARAMETER_GOLF_OUTPUT_ROOT", "").strip()
     seed = int(os.environ.get("SEED", 1337))
 
     # Validation cadence and batch size. Validation always uses the full fineweb_val split.
     val_batch_size = int(os.environ.get("VAL_BATCH_SIZE", 524_288))
-    val_loss_every = int(os.environ.get("VAL_LOSS_EVERY", 1000))
-    train_log_every = int(os.environ.get("TRAIN_LOG_EVERY", 200))
+    val_loss_every = int(os.environ.get("VAL_LOSS_EVERY", 0))  # for quick experiments, only do validation in the end
+    train_log_every = int(os.environ.get("TRAIN_LOG_EVERY", 20))
 
     # Training length.
     iterations = int(os.environ.get("ITERATIONS", 20000))
     warmdown_iters = int(os.environ.get("WARMDOWN_ITERS", 1200))
-    warmup_steps = int(os.environ.get("WARMUP_STEPS", 20))
-    train_batch_tokens = int(os.environ.get("TRAIN_BATCH_TOKENS", 524_288))
+    warmup_steps = int(os.environ.get("WARMUP_STEPS", 1))
+    train_batch_tokens = int(os.environ.get("TRAIN_BATCH_TOKENS", 524_288 // 2))  # // 2 for quick experiments but still representitive, don't change
     train_seq_len = int(os.environ.get("TRAIN_SEQ_LEN", 1024))
     max_wallclock_seconds = float(os.environ.get("MAX_WALLCLOCK_SECONDS", 600.0))
     qk_gain_init = float(os.environ.get("QK_GAIN_INIT", 1.5))
@@ -768,10 +775,16 @@ def main() -> None:
     enable_mem_efficient_sdp(False)
     enable_math_sdp(False)
 
+    artifact_dir = Path(args.output_root) / args.run_id if args.output_root else Path(".")
     logfile = None
     if master_process:
-        os.makedirs("logs", exist_ok=True)
-        logfile = f"logs/{args.run_id}.txt"
+        if args.output_root:
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            logfile = str(artifact_dir / "train.log")
+        else:
+            log_dir = artifact_dir / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            logfile = str(log_dir / f"{args.run_id}.txt")
         print(logfile)
 
     def log0(msg: str, console: bool = True) -> None:
@@ -1065,9 +1078,12 @@ def main() -> None:
     # Save the raw state (useful for debugging/loading in PyTorch directly), then always produce
     # the compressed int8+zlib artifact and validate the round-tripped weights.
 
+    final_pt = artifact_dir / "final_model.pt"
+    final_ptz = artifact_dir / "final_model.int8.ptz"
+
     if master_process:
-        torch.save(base_model.state_dict(), "final_model.pt")
-        model_bytes = os.path.getsize("final_model.pt")
+        torch.save(base_model.state_dict(), final_pt)
+        model_bytes = final_pt.stat().st_size
         code_bytes = len(code.encode("utf-8"))
         log0(f"Serialized model: {model_bytes} bytes")
         log0(f"Code size: {code_bytes} bytes")
@@ -1080,9 +1096,9 @@ def main() -> None:
     quant_blob = zlib.compress(quant_raw, level=9)
     quant_raw_bytes = len(quant_raw)
     if master_process:
-        with open("final_model.int8.ptz", "wb") as f:
+        with open(final_ptz, "wb") as f:
             f.write(quant_blob)
-        quant_file_bytes = os.path.getsize("final_model.int8.ptz")
+        quant_file_bytes = final_ptz.stat().st_size
         code_bytes = len(code.encode("utf-8"))
         ratio = quant_stats["baseline_tensor_bytes"] / max(quant_stats["int8_payload_bytes"], 1)
         log0(
@@ -1093,7 +1109,7 @@ def main() -> None:
 
     if distributed:
         dist.barrier()
-    with open("final_model.int8.ptz", "rb") as f:
+    with open(final_ptz, "rb") as f:
         quant_blob_disk = f.read()
     quant_state = torch.load(io.BytesIO(zlib.decompress(quant_blob_disk)), map_location="cpu")
     base_model.load_state_dict(dequantize_state_dict_int8(quant_state), strict=True)
