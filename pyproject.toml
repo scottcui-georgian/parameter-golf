@@ -1,0 +1,51 @@
+[project]
+name = "parameter-golf"
+version = "0.1.0"
+description = "Training scripts and data utilities for the Parameter Golf challenge."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "datasets",
+    "huggingface-hub",
+    "kernels",
+    "numpy",
+    "sentencepiece",
+    "tiktoken",
+    "tqdm",
+    "typing-extensions==4.15.0",
+]
+
+[project.optional-dependencies]
+linux-nvidia = [
+    "torch==2.9.1; sys_platform == 'linux'",
+]
+mlx = [
+    "mlx; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = false
+environments = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'linux'",
+]
+conflicts = [
+    [
+        { extra = "linux-nvidia" },
+        { extra = "mlx" },
+    ],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu128", extra = "linux-nvidia", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
