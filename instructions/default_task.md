@@ -9,8 +9,8 @@ Assume you are already in the checkout or worktree you should use.
 Loop indefinitely once setup is complete:
 
 1. Check the current git state.
-2. Query `autoresearch summary` and read relevant past `workspace/exp.md` files via `autoresearch read <commit>` to understand what has been tried. The first run from any fresh starting commit should normally be the unmodified baseline for that starting commit unless your instruction says otherwise or `autoresearch read <commit_hash>` is completed.
-3. Think about one concrete idea. Update `workspace/exp.md` with the hypothesis and reasoning, and edit `workspace/train_gpt.py` to implement the idea. Think deeply and mathematically.
+2. Query `autoresearch summary` and read relevant past experiment notes via `autoresearch read <commit>` to understand what has been tried. Do not treat `workspace/exp.md` as a running log across experiments; prior writeups live in git history.
+3. Think about one concrete idea. Replace `workspace/exp.md` with a fresh note for that experiment, then edit `workspace/train_gpt.py` to implement the idea. Think deeply and mathematically.
 4. Follow the single-experiment contract in `instructions/base_program.md`: commit the exact runnable snapshot before each training attempt, and treat the last code snapshot actually executed as the `run_commit`.
 5. Run: `python3 run.py train > run.log 2>&1` and wait until the training finished, crashed, or timed out.
 6. Inspect `run.log`.

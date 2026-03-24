@@ -57,13 +57,14 @@ class Hyperparameters:
     val_loss_every = int(os.environ.get("VAL_LOSS_EVERY", 0))  # for quick experiments, only do validation in the end
     train_log_every = int(os.environ.get("TRAIN_LOG_EVERY", 20))
 
-    # Training length.
-    iterations = int(os.environ.get("ITERATIONS", 200))  # previously: 20000, 200 for quick experiments, don't change
-    warmdown_iters = int(os.environ.get("WARMDOWN_ITERS", 1200))
+    # Training length. These defaults are for single-A10 proxy runs in autoresearch;
+    # they are meant to rank ideas before the final 8xH100 submission runs.
+    iterations = int(os.environ.get("ITERATIONS", 200))  # prior full-run default: 20_000
+    warmdown_iters = int(os.environ.get("WARMDOWN_ITERS", 12))  # prior full-run default: 1_200
     warmup_steps = int(os.environ.get("WARMUP_STEPS", 1))
-    train_batch_tokens = int(os.environ.get("TRAIN_BATCH_TOKENS", 524_288 // 2))  # // 2 for quick experiments but still representitive, don't change
+    train_batch_tokens = int(os.environ.get("TRAIN_BATCH_TOKENS", 262_144))  # prior full-run default: 524_288
     train_seq_len = int(os.environ.get("TRAIN_SEQ_LEN", 1024))
-    max_wallclock_seconds = float(os.environ.get("MAX_WALLCLOCK_SECONDS", 600.0))
+    max_wallclock_seconds = float(os.environ.get("MAX_WALLCLOCK_SECONDS", 0.0))  # prior full-run default: 600.0
     qk_gain_init = float(os.environ.get("QK_GAIN_INIT", 1.5))
 
     # Model shape.
@@ -87,7 +88,7 @@ class Hyperparameters:
     muon_momentum = float(os.environ.get("MUON_MOMENTUM", 0.95))
     muon_backend_steps = int(os.environ.get("MUON_BACKEND_STEPS", 5))
     muon_momentum_warmup_start = float(os.environ.get("MUON_MOMENTUM_WARMUP_START", 0.85))
-    muon_momentum_warmup_steps = int(os.environ.get("MUON_MOMENTUM_WARMUP_STEPS", 500))
+    muon_momentum_warmup_steps = int(os.environ.get("MUON_MOMENTUM_WARMUP_STEPS", 5))  # prior full-run default: 500
     beta1 = float(os.environ.get("BETA1", 0.9))
     beta2 = float(os.environ.get("BETA2", 0.95))
     adam_eps = float(os.environ.get("ADAM_EPS", 1e-8))

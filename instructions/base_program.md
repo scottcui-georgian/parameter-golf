@@ -23,6 +23,9 @@ You can ONLY modify the 2 editable files above. Any changes outside the scope wi
 ## Execution Contract
 
 Each experiment runs on Modal with the GPU and timeouts configured in `.runner/modal_app.py`.
+Current autoresearch training runs use a single-A10 proxy setup to rank ideas before the final
+8xH100 submission runs. Treat proxy results as directional rather than exact; hyperparameters that
+win on the proxy may still need retuning or rejection on the real 8xH100 budget.
 
 ```bash
 python3 run.py train > run.log 2>&1
@@ -62,6 +65,14 @@ Rules:
 
 ## exp.md
 
+`workspace/exp.md` is for one experiment only. Do not accumulate multiple experiments in the same file.
+
+For each new experiment:
+
+- start from a fresh `workspace/exp.md` for that experiment
+- replace the previous contents instead of appending a new experiment below an old one
+- use `autoresearch read <commit>` to inspect prior experiment writeups
+
 Write `workspace/exp.md` before the run commit. Include:
 
 - **Hypothesis**: what you expect and why
@@ -70,6 +81,8 @@ Write `workspace/exp.md` before the run commit. Include:
 
 After the run, append a **Results** section with val_bpb, peak VRAM (MiB), optional submission
 size lines from the log, status (`keep`, `discard`, `crash`, or `timeout`), and brief analysis.
+Within a single experiment, appending the **Results** section is correct. Across experiments, replace
+the file with a new experiment note.
 That results update is the only change allowed in `result_commit`.
 
 ## Experiment tracking
