@@ -13,3 +13,5 @@ data/docs_selected.jsonl
 .venv/
 logs/
 .env
+
+.autoresearch/*.db

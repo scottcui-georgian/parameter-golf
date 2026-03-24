@@ -6,7 +6,7 @@ Primary objective: minimize final validation `val_bpb` on the fixed FineWeb vali
 
 Operationally, this means optimizing the score that would count for submission, while staying within the challenge artifact, training-time, and evaluation-time limits. In this checkout, freely modify **`workspace/train_gpt.py`** to improve architecture, optimization, inference, evaluation, compression, and serialization.
 
-## Hard Constraints
+## Submission Hard Constraints
 
 - Training must reproducibly finish within `10 minutes` on `8xH100` for the leaderboard track.
 - Evaluation must finish within `10 minutes` on `8xH100`.
@@ -35,7 +35,7 @@ Operationally, this means optimizing the score that would count for submission, 
 
 ## Practical Success Criteria
 
-Each serious run should report, at minimum:
+Each serious run should report these metrics, at minimum:
 
 - final roundtrip `val_bpb`
 - training wallclock

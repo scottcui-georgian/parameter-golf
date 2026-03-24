@@ -58,7 +58,7 @@ class Hyperparameters:
     train_log_every = int(os.environ.get("TRAIN_LOG_EVERY", 20))
 
     # Training length.
-    iterations = int(os.environ.get("ITERATIONS", 20000))
+    iterations = int(os.environ.get("ITERATIONS", 200))  # previously: 20000, 200 for quick experiments, don't change
     warmdown_iters = int(os.environ.get("WARMDOWN_ITERS", 1200))
     warmup_steps = int(os.environ.get("WARMUP_STEPS", 1))
     train_batch_tokens = int(os.environ.get("TRAIN_BATCH_TOKENS", 524_288 // 2))  # // 2 for quick experiments but still representitive, don't change
